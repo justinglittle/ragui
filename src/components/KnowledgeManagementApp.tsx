@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { LayoutDashboard, BookOpen, FileText, MessageSquare, Settings } from "lucide-react";
 
 export default function KnowledgeManagementApp() {
-  const [active, setActive] = useState("Containers");
+  const [active, setActive] = useState("Dashboard");
+  const [messages, setMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const nav = [
     { name: "Dashboard", icon: LayoutDashboard },
@@ -15,6 +17,50 @@ export default function KnowledgeManagementApp() {
     { name: "Chat", icon: MessageSquare },
     { name: "Settings", icon: Settings },
   ];
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const userMessage = inputMessage.trim();
+    setInputMessage("");
+
+    // Add user message to chat
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('https://jeff.justinglittle.com/webhook/0cd361a4-5c3a-4023-bfd3-66e392d1ed5c/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          chatHistory: messages
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Add assistant response to chat
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data.response || data.message || 'No response received'
+      }]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Error: Failed to get response from the server.'
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800">
@@ -109,10 +155,50 @@ export default function KnowledgeManagementApp() {
             <Card className="h-full">
               <CardContent className="p-4 flex flex-col h-full">
                 <div className="text-sm font-medium mb-2">Knowledge Chat</div>
-                <div className="flex-1 border rounded-md bg-white p-3 text-sm text-slate-500">Ask questions about your knowledge base…</div>
+                <div className="flex-1 border rounded-md bg-white p-3 overflow-auto space-y-3">
+                  {messages.length === 0 ? (
+                    <div className="text-sm text-slate-500">Ask questions about your knowledge base…</div>
+                  ) : (
+                    messages.map((msg, idx) => (
+                      <div
+                        key={idx}
+                        className={`text-sm p-3 rounded-md ${
+                          msg.role === 'user'
+                            ? 'bg-slate-100 ml-12'
+                            : 'bg-blue-50 mr-12'
+                        }`}
+                      >
+                        <div className="font-medium text-xs mb-1 text-slate-600">
+                          {msg.role === 'user' ? 'You' : 'Assistant'}
+                        </div>
+                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                      </div>
+                    ))
+                  )}
+                  {isLoading && (
+                    <div className="text-sm p-3 rounded-md bg-blue-50 mr-12">
+                      <div className="font-medium text-xs mb-1 text-slate-600">Assistant</div>
+                      <div className="text-slate-500">Thinking...</div>
+                    </div>
+                  )}
+                </div>
                 <div className="mt-3 flex gap-2">
-                  <Input className="text-sm" placeholder="Ask something" />
-                  <Button size="sm">Send</Button>
+                  <Input
+                    className="text-sm"
+                    placeholder="Ask something"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <Button size="sm" onClick={handleSendMessage} disabled={isLoading || !inputMessage.trim()}>
+                    {isLoading ? 'Sending...' : 'Send'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -129,7 +215,8 @@ export default function KnowledgeManagementApp() {
 
           {active === "Settings" && (
             <Card>
-              <CardContent className="p-4 text-sm">Integration & system settings</CardContent></Card>
+              <CardContent className="p-4 text-sm">Integration & system settings</CardContent>
+            </Card>
           )}
         </section>
       </main>
