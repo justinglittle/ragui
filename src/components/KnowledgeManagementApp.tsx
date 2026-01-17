@@ -46,10 +46,37 @@ export default function KnowledgeManagementApp() {
 
       const data = await response.json();
 
+      // Log the response to help debug
+      console.log('Webhook response:', data);
+
+      // Try to extract the message from various possible response structures
+      let assistantMessage = 'No response received';
+
+      if (typeof data === 'string') {
+        assistantMessage = data;
+      } else if (data.response) {
+        assistantMessage = data.response;
+      } else if (data.message) {
+        assistantMessage = data.message;
+      } else if (data.output) {
+        assistantMessage = data.output;
+      } else if (data.text) {
+        assistantMessage = data.text;
+      } else if (data.content) {
+        assistantMessage = data.content;
+      } else if (data.data) {
+        // Sometimes n8n wraps the response in a data field
+        if (typeof data.data === 'string') {
+          assistantMessage = data.data;
+        } else if (data.data.response || data.data.message) {
+          assistantMessage = data.data.response || data.data.message;
+        }
+      }
+
       // Add assistant response to chat
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.response || data.message || 'No response received'
+        content: assistantMessage
       }]);
     } catch (error) {
       console.error('Error sending message:', error);
