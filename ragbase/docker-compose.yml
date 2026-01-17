@@ -1,0 +1,13 @@
+services:
+  km-frontend:
+    container_name: km-frontend
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "3002:80"
+    networks:
+      - jeff
+
+networks:
+  jeff:
