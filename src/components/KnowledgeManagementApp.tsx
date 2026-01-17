@@ -35,7 +35,7 @@ export default function KnowledgeManagementApp() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: userMessage,
+          chatInput: userMessage,
           chatHistory: messages
         }),
       });
@@ -48,6 +48,12 @@ export default function KnowledgeManagementApp() {
 
       // Log the response to help debug
       console.log('Webhook response:', data);
+
+      // Check if the response contains an error
+      if (data.error) {
+        const errorContent = data.error.content || JSON.stringify(data.error);
+        throw new Error(`Webhook error: ${errorContent}`);
+      }
 
       // Try to extract the message from various possible response structures
       let assistantMessage = 'No response received';
