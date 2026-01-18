@@ -61,8 +61,23 @@ export default function KnowledgeManagementApp() {
           throw new Error(`Webhook error: ${errorContent}`);
         }
 
+        // n8n often returns an array of objects
+        if (Array.isArray(data) && data.length > 0) {
+          // Get the first item in the array
+          const firstItem = data[0];
+          if (firstItem.content) {
+            assistantMessage = firstItem.content;
+          } else if (firstItem.message) {
+            assistantMessage = firstItem.message;
+          } else if (firstItem.response) {
+            assistantMessage = firstItem.response;
+          } else {
+            // Fallback to stringifying the first item
+            assistantMessage = JSON.stringify(firstItem);
+          }
+        }
         // Try to extract the message from various possible response structures
-        if (data.response) {
+        else if (data.response) {
           assistantMessage = data.response;
         } else if (data.message) {
           assistantMessage = data.message;
