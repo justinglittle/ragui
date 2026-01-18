@@ -44,38 +44,47 @@ export default function KnowledgeManagementApp() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Get the response as text first
+      const responseText = await response.text();
+      console.log('Raw webhook response:', responseText);
 
-      // Log the response to help debug
-      console.log('Webhook response:', data);
-
-      // Check if the response contains an error
-      if (data.error) {
-        const errorContent = data.error.content || JSON.stringify(data.error);
-        throw new Error(`Webhook error: ${errorContent}`);
-      }
-
-      // Try to extract the message from various possible response structures
       let assistantMessage = 'No response received';
 
-      if (typeof data === 'string') {
-        assistantMessage = data;
-      } else if (data.response) {
-        assistantMessage = data.response;
-      } else if (data.message) {
-        assistantMessage = data.message;
-      } else if (data.output) {
-        assistantMessage = data.output;
-      } else if (data.text) {
-        assistantMessage = data.text;
-      } else if (data.content) {
-        assistantMessage = data.content;
-      } else if (data.data) {
-        // Sometimes n8n wraps the response in a data field
-        if (typeof data.data === 'string') {
-          assistantMessage = data.data;
-        } else if (data.data.response || data.data.message) {
-          assistantMessage = data.data.response || data.data.message;
+      // Try to parse as JSON first
+      try {
+        const data = JSON.parse(responseText);
+        console.log('Parsed JSON:', data);
+
+        // Check if the response contains an error
+        if (data.error) {
+          const errorContent = data.error.content || JSON.stringify(data.error);
+          throw new Error(`Webhook error: ${errorContent}`);
+        }
+
+        // Try to extract the message from various possible response structures
+        if (data.response) {
+          assistantMessage = data.response;
+        } else if (data.message) {
+          assistantMessage = data.message;
+        } else if (data.output) {
+          assistantMessage = data.output;
+        } else if (data.text) {
+          assistantMessage = data.text;
+        } else if (data.content) {
+          assistantMessage = data.content;
+        } else if (data.data) {
+          // Sometimes n8n wraps the response in a data field
+          if (typeof data.data === 'string') {
+            assistantMessage = data.data;
+          } else if (data.data.response || data.data.message) {
+            assistantMessage = data.data.response || data.data.message;
+          }
+        }
+      } catch (jsonError) {
+        // If JSON parsing fails, use the raw text response
+        console.log('Not JSON, using raw text');
+        if (responseText && responseText.trim()) {
+          assistantMessage = responseText;
         }
       }
 
