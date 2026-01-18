@@ -59,65 +59,90 @@ export default function KnowledgeManagementApp() {
 
       let assistantMessage = 'No response received';
 
-      // Try to parse as JSON first
-      try {
-        const data = JSON.parse(responseText);
-        console.log('Parsed JSON:', data);
+      // Check if this is NDJSON (streaming) format - multiple JSON objects separated by newlines
+      const lines = responseText.trim().split('\n').filter(line => line.trim());
 
-        // Check if the response contains an error
-        if (data.error) {
-          const errorContent = data.error.content || JSON.stringify(data.error);
-          throw new Error(`Webhook error: ${errorContent}`);
+      if (lines.length > 1) {
+        // This is streaming NDJSON format
+        console.log('Detected streaming NDJSON response');
+        const contentParts: string[] = [];
+
+        for (const line of lines) {
+          try {
+            const item = JSON.parse(line);
+            // Extract content from streaming items
+            if (item.type === 'item' && item.content) {
+              contentParts.push(item.content);
+            }
+          } catch (e) {
+            console.warn('Failed to parse line:', line);
+          }
         }
 
-        // n8n chat webhook returns { output: "response", sessionId: "..." }
-        if (data.output) {
-          assistantMessage = data.output;
-          // Update sessionId if provided
-          if (data.sessionId) {
-            setSessionId(data.sessionId);
-            localStorage.setItem('n8n-chat-session-id', data.sessionId);
-          }
+        if (contentParts.length > 0) {
+          assistantMessage = contentParts.join('');
         }
-        // n8n often returns an array of objects
-        else if (Array.isArray(data) && data.length > 0) {
-          // Get the first item in the array
-          const firstItem = data[0];
-          if (firstItem.content) {
-            assistantMessage = firstItem.content;
-          } else if (firstItem.output) {
-            assistantMessage = firstItem.output;
-          } else if (firstItem.message) {
-            assistantMessage = firstItem.message;
-          } else if (firstItem.response) {
-            assistantMessage = firstItem.response;
-          } else {
-            // Fallback to stringifying the first item
-            assistantMessage = JSON.stringify(firstItem);
+      } else {
+        // Single JSON object response
+        try {
+          const data = JSON.parse(responseText);
+          console.log('Parsed JSON:', data);
+
+          // Check if the response contains an error
+          if (data.error) {
+            const errorContent = data.error.content || JSON.stringify(data.error);
+            throw new Error(`Webhook error: ${errorContent}`);
           }
-        }
-        // Try to extract the message from various possible response structures
-        else if (data.response) {
-          assistantMessage = data.response;
-        } else if (data.message) {
-          assistantMessage = data.message;
-        } else if (data.text) {
-          assistantMessage = data.text;
-        } else if (data.content) {
-          assistantMessage = data.content;
-        } else if (data.data) {
-          // Sometimes n8n wraps the response in a data field
-          if (typeof data.data === 'string') {
-            assistantMessage = data.data;
-          } else if (data.data.output || data.data.response || data.data.message) {
-            assistantMessage = data.data.output || data.data.response || data.data.message;
+
+          // n8n chat webhook returns { output: "response", sessionId: "..." }
+          if (data.output) {
+            assistantMessage = data.output;
+            // Update sessionId if provided
+            if (data.sessionId) {
+              setSessionId(data.sessionId);
+              localStorage.setItem('n8n-chat-session-id', data.sessionId);
+            }
           }
-        }
-      } catch (jsonError) {
-        // If JSON parsing fails, use the raw text response
-        console.log('Not JSON, using raw text');
-        if (responseText && responseText.trim()) {
-          assistantMessage = responseText;
+          // n8n often returns an array of objects
+          else if (Array.isArray(data) && data.length > 0) {
+            // Get the first item in the array
+            const firstItem = data[0];
+            if (firstItem.content) {
+              assistantMessage = firstItem.content;
+            } else if (firstItem.output) {
+              assistantMessage = firstItem.output;
+            } else if (firstItem.message) {
+              assistantMessage = firstItem.message;
+            } else if (firstItem.response) {
+              assistantMessage = firstItem.response;
+            } else {
+              // Fallback to stringifying the first item
+              assistantMessage = JSON.stringify(firstItem);
+            }
+          }
+          // Try to extract the message from various possible response structures
+          else if (data.response) {
+            assistantMessage = data.response;
+          } else if (data.message) {
+            assistantMessage = data.message;
+          } else if (data.text) {
+            assistantMessage = data.text;
+          } else if (data.content) {
+            assistantMessage = data.content;
+          } else if (data.data) {
+            // Sometimes n8n wraps the response in a data field
+            if (typeof data.data === 'string') {
+              assistantMessage = data.data;
+            } else if (data.data.output || data.data.response || data.data.message) {
+              assistantMessage = data.data.output || data.data.response || data.data.message;
+            }
+          }
+        } catch (jsonError) {
+          // If JSON parsing fails, use the raw text response
+          console.log('Not JSON, using raw text');
+          if (responseText && responseText.trim()) {
+            assistantMessage = responseText;
+          }
         }
       }
 
