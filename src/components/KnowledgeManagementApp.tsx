@@ -9,6 +9,14 @@ export default function KnowledgeManagementApp() {
   const [messages, setMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(() => {
+    // Generate a unique session ID or load from localStorage
+    const stored = localStorage.getItem('n8n-chat-session-id');
+    if (stored) return stored;
+    const newId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    localStorage.setItem('n8n-chat-session-id', newId);
+    return newId;
+  });
 
   const nav = [
     { name: "Dashboard", icon: LayoutDashboard },
@@ -35,8 +43,9 @@ export default function KnowledgeManagementApp() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'sendMessage',
+          sessionId: sessionId,
           chatInput: userMessage,
-          chatHistory: messages
         }),
       });
 
@@ -61,12 +70,23 @@ export default function KnowledgeManagementApp() {
           throw new Error(`Webhook error: ${errorContent}`);
         }
 
+        // n8n chat webhook returns { output: "response", sessionId: "..." }
+        if (data.output) {
+          assistantMessage = data.output;
+          // Update sessionId if provided
+          if (data.sessionId) {
+            setSessionId(data.sessionId);
+            localStorage.setItem('n8n-chat-session-id', data.sessionId);
+          }
+        }
         // n8n often returns an array of objects
-        if (Array.isArray(data) && data.length > 0) {
+        else if (Array.isArray(data) && data.length > 0) {
           // Get the first item in the array
           const firstItem = data[0];
           if (firstItem.content) {
             assistantMessage = firstItem.content;
+          } else if (firstItem.output) {
+            assistantMessage = firstItem.output;
           } else if (firstItem.message) {
             assistantMessage = firstItem.message;
           } else if (firstItem.response) {
@@ -81,8 +101,6 @@ export default function KnowledgeManagementApp() {
           assistantMessage = data.response;
         } else if (data.message) {
           assistantMessage = data.message;
-        } else if (data.output) {
-          assistantMessage = data.output;
         } else if (data.text) {
           assistantMessage = data.text;
         } else if (data.content) {
@@ -91,8 +109,8 @@ export default function KnowledgeManagementApp() {
           // Sometimes n8n wraps the response in a data field
           if (typeof data.data === 'string') {
             assistantMessage = data.data;
-          } else if (data.data.response || data.data.message) {
-            assistantMessage = data.data.response || data.data.message;
+          } else if (data.data.output || data.data.response || data.data.message) {
+            assistantMessage = data.data.output || data.data.response || data.data.message;
           }
         }
       } catch (jsonError) {
